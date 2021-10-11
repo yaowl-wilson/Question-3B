@@ -1,0 +1,104 @@
+########## Config Map: Environment Settings ##########
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: myrabbitmq-configmap
+data:
+  env_rabbitmq_host: "myrabbitmq"
+  env_rabbitmq_port: "5672"
+  env_rabbitmq_username: Z3Vlc3Q=
+  env_rabbitmq_password: Z3Vlc3Q=
+---
+########## Deployment: Consumer ##########
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myconsumer
+  labels:
+    app: myconsumer-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: myconsumer
+  template:
+    metadata:
+      labels:
+        app: myconsumer
+    spec:
+      containers:
+      - name: myconsumer
+        image: yaowl/messaging-consumer-api:1.0.1
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 8000
+        - containerPort: 8001
+        env:
+        - name: ENV_RABBITMQ_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: myrabbitmq-configmap
+              key: env_rabbitmq_host
+        - name: ENV_RABBITMQ_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: myrabbitmq-configmap
+              key: env_rabbitmq_port
+        - name: ENV_RABBITMQ_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: myrabbitmq-configmap
+              key: env_rabbitmq_username
+        - name: ENV_RABBITMQ_PASSWORD
+          valueFrom:
+            configMapKeyRef:
+              name: myrabbitmq-configmap
+              key: env_rabbitmq_password
+---
+########## Service: Producer ##########
+apiVersion: v1
+kind: Service
+metadata:
+  name: myconsumer-service
+spec:
+  type: NodePort
+  selector:
+    app: myconsumer
+  ports:
+  - port: 8000
+    targetPort: 8000
+    nodePort: 30500
+    name: "myconsumernossl"
+  - port: 8001
+    targetPort: 8001
+    nodePort: 30501
+    name: "myconsumerssl"
+---
+########## HorizontalPodAutoscaler: Autoscaling for Producer ##########
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: myconsumer-autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: myconsumer
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 75
